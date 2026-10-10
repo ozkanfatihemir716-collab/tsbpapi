@@ -1,0 +1,1407 @@
+-- ==================== KIRMIZI vs MAVİ HUB v8 (Auto Kill + Oto Kılıç) ====================
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local IS_MOBILE = UserInputService.TouchEnabled and not GuiService.IsWindows
+local DEVICE_NAME = IS_MOBILE and "MOBİL" or "PC"
+
+local Settings = {
+    Aimlock = false,
+    ESP = false,
+    ESP_Highlight = true,
+    ESP_HealthBar = true,
+    ESP_Distance = true,
+    Speed = false,
+    Jump = false,
+    AutoKill = false,
+    WalkSpeed = 32,
+    JumpPower = 60,
+    Smoothness = 0.4,
+    MaxRange = 300,
+    AimPart = "Head",
+    Color = Color3.fromRGB(255, 60, 60),
+    Color2 = Color3.fromRGB(60, 120, 255),
+    FpsSize = 96,
+    _perfMode = IS_MOBILE and "mid" or "high"
+}
+
+local stickyTarget = nil
+local currentTarget = nil
+local aimTargetPart = nil
+
+local autoKillTarget = nil
+local autoKillList = {}
+local autoKillIndex = 1
+local autoKillAttackTimer = 0
+
+-- ==================== FPS ====================
+local fps = 0
+local frameCount = 0; local timeAccum = 0
+RunService.RenderStepped:Connect(function(dt)
+    frameCount = frameCount + 1; timeAccum = timeAccum + dt
+    if timeAccum >= 1 then fps = math.floor(frameCount / timeAccum); frameCount = 0; timeAccum = 0 end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if fps < 22 then Settings._perfMode = "low"
+        elseif fps < 35 then Settings._perfMode = "mid"
+        else Settings._perfMode = "high" end
+    end
+end)
+
+-- ==================== YÜKLEME EKRANI ====================
+local LoadingGui = Instance.new("ScreenGui")
+LoadingGui.Name = "RVB_Loading"; LoadingGui.ResetOnSpawn = false
+LoadingGui.IgnoreGuiInset = true; LoadingGui.DisplayOrder = 999; LoadingGui.Parent = PlayerGui
+
+local LoadingBg = Instance.new("Frame", LoadingGui)
+LoadingBg.Size = UDim2.new(1, 0, 1, 0)
+LoadingBg.BackgroundColor3 = Color3.fromRGB(8, 6, 14)
+LoadingBg.BorderSizePixel = 0
+
+local bgGrad = Instance.new("UIGradient", LoadingBg)
+bgGrad.Rotation = 135
+bgGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 8, 24)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22, 12, 36)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 6, 14)),
+}
+
+local LoadingFrame = Instance.new("Frame", LoadingBg)
+LoadingFrame.Size = UDim2.new(0, 400, 0, 280)
+LoadingFrame.Position = UDim2.new(0.5, -200, 0.5, -140)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(16, 11, 26)
+LoadingFrame.BackgroundTransparency = 0.05
+LoadingFrame.BorderSizePixel = 0
+Instance.new("UICorner", LoadingFrame).CornerRadius = UDim.new(0, 20)
+
+local LoadingStroke = Instance.new("UIStroke", LoadingFrame)
+LoadingStroke.Thickness = 1.5
+LoadingStroke.Color = Color3.fromRGB(100, 80, 180)
+LoadingStroke.Transparency = 0.2
+
+local RingContainer = Instance.new("Frame", LoadingFrame)
+RingContainer.Size = UDim2.new(0, 130, 0, 130)
+RingContainer.Position = UDim2.new(0.5, -65, 0, 25)
+RingContainer.BackgroundTransparency = 1
+
+local Ring1 = Instance.new("Frame", RingContainer)
+Ring1.Size = UDim2.new(1, 0, 1, 0)
+Ring1.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+Ring1.BackgroundTransparency = 0.15
+Ring1.BorderSizePixel = 0
+Instance.new("UICorner", Ring1).CornerRadius = UDim.new(1, 0)
+
+local ringGrad = Instance.new("UIGradient", Ring1)
+ringGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 60)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 160, 100)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 120, 255)),
+}
+
+local RingInner = Instance.new("Frame", Ring1)
+RingInner.Size = UDim2.new(1, -10, 1, -10)
+RingInner.Position = UDim2.new(0, 5, 0, 5)
+RingInner.BackgroundColor3 = Color3.fromRGB(16, 11, 26)
+RingInner.BorderSizePixel = 0
+Instance.new("UICorner", RingInner).CornerRadius = UDim.new(1, 0)
+
+local RingLogo = Instance.new("TextLabel", Ring1)
+RingLogo.Size = UDim2.new(1, 0, 1, 0)
+RingLogo.BackgroundTransparency = 1
+RingLogo.Text = "N"
+RingLogo.TextColor3 = Color3.fromRGB(240, 220, 255)
+RingLogo.Font = Enum.Font.GothamBlack
+RingLogo.TextSize = 52
+RingLogo.ZIndex = 3
+
+task.spawn(function()
+    local pulse = 0
+    while Ring1.Parent do
+        task.wait(0.03)
+        ringGrad.Rotation = (ringGrad.Rotation + 3) % 360
+        pulse = (pulse + 0.03) % 1
+        Ring1.BackgroundTransparency = 0.15 + math.abs(math.sin(pulse * math.pi)) * 0.25
+    end
+end)
+
+local LoadingTitle = Instance.new("TextLabel", LoadingFrame)
+LoadingTitle.Size = UDim2.new(1, 0, 0, 40)
+LoadingTitle.Position = UDim2.new(0, 0, 0, 165)
+LoadingTitle.BackgroundTransparency = 1
+LoadingTitle.Text = "NOVE HUB"
+LoadingTitle.TextColor3 = Color3.fromRGB(245, 240, 255)
+LoadingTitle.Font = Enum.Font.GothamBlack
+LoadingTitle.TextSize = 28
+LoadingTitle.TextXAlignment = Enum.TextXAlignment.Center
+
+local LoadingSub = Instance.new("TextLabel", LoadingFrame)
+LoadingSub.Size = UDim2.new(1, 0, 0, 16)
+LoadingSub.Position = UDim2.new(0, 0, 0, 205)
+LoadingSub.BackgroundTransparency = 1
+LoadingSub.Text = "Kırmızı vs Mavi · " .. DEVICE_NAME
+LoadingSub.TextColor3 = Color3.fromRGB(180, 170, 220)
+LoadingSub.Font = Enum.Font.Gotham
+LoadingSub.TextSize = 11
+LoadingSub.TextXAlignment = Enum.TextXAlignment.Center
+
+local LoadingStatus = Instance.new("TextLabel", LoadingFrame)
+LoadingStatus.Size = UDim2.new(1, 0, 0, 20)
+LoadingStatus.Position = UDim2.new(0, 0, 0, 228)
+LoadingStatus.BackgroundTransparency = 1
+LoadingStatus.Text = "Yükleniyor..."
+LoadingStatus.TextColor3 = Color3.fromRGB(200, 190, 220)
+LoadingStatus.Font = Enum.Font.GothamBold
+LoadingStatus.TextSize = 10
+LoadingStatus.TextXAlignment = Enum.TextXAlignment.Center
+
+local BarBg = Instance.new("Frame", LoadingFrame)
+BarBg.Size = UDim2.new(1, -60, 0, 6)
+BarBg.Position = UDim2.new(0, 30, 1, -30)
+BarBg.BackgroundColor3 = Color3.fromRGB(35, 25, 55)
+BarBg.BorderSizePixel = 0
+Instance.new("UICorner", BarBg).CornerRadius = UDim.new(1, 0)
+
+local BarFill = Instance.new("Frame", BarBg)
+BarFill.Size = UDim2.new(0, 0, 1, 0)
+BarFill.BackgroundColor3 = Color3.fromRGB(255, 140, 80)
+BarFill.BorderSizePixel = 0
+Instance.new("UICorner", BarFill).CornerRadius = UDim.new(1, 0)
+
+local barGrad = Instance.new("UIGradient", BarFill)
+barGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 60)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 120, 255)),
+}
+
+local progress = 0
+task.spawn(function()
+    while progress < 1 do
+        task.wait(0.03)
+        progress = math.min(1, progress + math.random() * 0.03)
+        BarFill.Size = UDim2.new(progress, 0, 1, 0)
+        if progress < 0.3 then LoadingStatus.Text = "Servisler başlatılıyor..."
+        elseif progress < 0.6 then LoadingStatus.Text = "Tablet optimizasyonu..."
+        elseif progress < 0.9 then LoadingStatus.Text = "Cihaz: " .. DEVICE_NAME
+        else LoadingStatus.Text = "Hazır!" end
+    end
+    task.wait(0.3)
+    LoadingFrame:TweenPosition(UDim2.new(0.5, -200, 1.5, 0), Enum.EasingDirection.In, Enum.EasingStyle.Back, 0.5, true)
+    task.wait(0.5)
+    LoadingGui:Destroy()
+end)
+
+task.wait(2.5)
+
+-- ==================== TAKIM ====================
+local function isTeammate(p)
+    if p == LocalPlayer then return true end
+    local myTeam = LocalPlayer.Team
+    local pTeam = p.Team
+    if not myTeam or not pTeam then return false end
+    return pTeam == myTeam
+end
+
+local function hasForceField(p)
+    if not p.Character then return false end
+    return p.Character:FindFirstChildOfClass("ForceField") ~= nil
+end
+
+local function getTeamLabel(p)
+    if not p.Team then return "⬜ YOK" end
+    local name = p.Team.Name:lower()
+    if name:find("red") or name:find("kırmızı") or name:find("kirmizi") then
+        return "🔴 KIRMIZI"
+    elseif name:find("blue") or name:find("mavi") then
+        return "🔵 MAVİ"
+    else
+        return "⚪ " .. p.Team.Name
+    end
+end
+
+local function getTeamColor(p)
+    if not p.Team then return Color3.fromRGB(180, 180, 180) end
+    local name = p.Team.Name:lower()
+    if name:find("red") or name:find("kırmızı") or name:find("kirmizi") then
+        return Color3.fromRGB(255, 80, 80)
+    elseif name:find("blue") or name:find("mavi") then
+        return Color3.fromRGB(80, 140, 255)
+    else
+        return Color3.fromRGB(180, 180, 180)
+    end
+end
+
+-- ==================== GUI ====================
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "RVB_Hub"; Gui.ResetOnSpawn = false; Gui.IgnoreGuiInset = true
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Gui.Parent = PlayerGui
+
+local ToastFrame = Instance.new("Frame", Gui)
+ToastFrame.Size = UDim2.new(0, 360, 0, 50)
+ToastFrame.Position = UDim2.new(0.5, -180, 0, -60)
+ToastFrame.BackgroundColor3 = Color3.fromRGB(20, 16, 30)
+ToastFrame.BorderSizePixel = 0
+ToastFrame.ZIndex = 100
+Instance.new("UICorner", ToastFrame).CornerRadius = UDim.new(0, 12)
+
+local ToastStroke = Instance.new("UIStroke", ToastFrame)
+ToastStroke.Thickness = 2
+ToastStroke.Color = Settings.Color
+
+local ToastGrad = Instance.new("UIGradient", ToastFrame)
+ToastGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Settings.Color),
+    ColorSequenceKeypoint.new(1, Settings.Color2)
+}
+ToastGrad.Transparency = NumberSequence.new(0.85)
+
+local ToastIcon = Instance.new("TextLabel", ToastFrame)
+ToastIcon.Size = UDim2.new(0, 40, 1, 0)
+ToastIcon.Position = UDim2.new(0, 8, 0, 0)
+ToastIcon.BackgroundTransparency = 1
+ToastIcon.Text = "⚔️"
+ToastIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToastIcon.Font = Enum.Font.GothamBold
+ToastIcon.TextSize = 22
+ToastIcon.ZIndex = 101
+
+local ToastText = Instance.new("TextLabel", ToastFrame)
+ToastText.Size = UDim2.new(1, -60, 1, 0)
+ToastText.Position = UDim2.new(0, 52, 0, 0)
+ToastText.BackgroundTransparency = 1
+ToastText.Text = "Kılıcı eline al!"
+ToastText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToastText.Font = Enum.Font.GothamBold
+ToastText.TextSize = 14
+ToastText.TextXAlignment = Enum.TextXAlignment.Left
+ToastText.ZIndex = 101
+
+local function showToast(text, icon)
+    ToastText.Text = text
+    ToastIcon.Text = icon or "⚔️"
+    ToastFrame:TweenPosition(UDim2.new(0.5, -180, 0, 20), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.4, true)
+    task.delay(3, function()
+        ToastFrame:TweenPosition(UDim2.new(0.5, -180, 0, -60), Enum.EasingDirection.In, Enum.EasingStyle.Back, 0.4, true)
+    end)
+end
+
+-- ==================== ANA PANEL ====================
+local Main = Instance.new("Frame", Gui)
+Main.Size = UDim2.new(0, 320, 0, 500)
+Main.Position = UDim2.new(0.04, 0, 0.10, 0)
+Main.BackgroundColor3 = Color3.fromRGB(14, 12, 20)
+Main.BorderSizePixel = 0
+Main.Active = false
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 18)
+local MainStroke = Instance.new("UIStroke", Main)
+MainStroke.Thickness = 1.5; MainStroke.Color = Settings.Color; MainStroke.Transparency = 0.35
+
+local Header = Instance.new("Frame", Main)
+Header.Size = UDim2.new(1, 0, 0, 64)
+Header.BackgroundColor3 = Color3.fromRGB(16, 12, 24)
+Header.BorderSizePixel = 0
+Header.Active = true
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 18)
+
+local HeaderGrad = Instance.new("UIGradient", Header)
+HeaderGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Settings.Color),
+    ColorSequenceKeypoint.new(1, Settings.Color2)
+}
+HeaderGrad.Transparency = NumberSequence.new(0.85)
+
+local LogoWrap = Instance.new("Frame", Header)
+LogoWrap.Size = UDim2.new(0, 46, 0, 46)
+LogoWrap.Position = UDim2.new(0, 14, 0.5, -23)
+LogoWrap.BackgroundTransparency = 1
+LogoWrap.Active = false
+
+local LogoGlow = Instance.new("Frame", LogoWrap)
+LogoGlow.Size = UDim2.new(1, 8, 1, 8)
+LogoGlow.Position = UDim2.new(0, -4, 0, -4)
+LogoGlow.BackgroundColor3 = Settings.Color
+LogoGlow.BackgroundTransparency = 0.6
+LogoGlow.BorderSizePixel = 0
+Instance.new("UICorner", LogoGlow).CornerRadius = UDim.new(1, 0)
+
+local GlowGrad = Instance.new("UIGradient", LogoGlow)
+GlowGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Settings.Color),
+    ColorSequenceKeypoint.new(1, Settings.Color2)
+}
+
+local LogoBadge = Instance.new("Frame", LogoWrap)
+LogoBadge.Size = UDim2.new(1, 0, 1, 0)
+LogoBadge.BackgroundColor3 = Settings.Color
+LogoBadge.BorderSizePixel = 0
+LogoBadge.Active = false
+Instance.new("UICorner", LogoBadge).CornerRadius = UDim.new(1, 0)
+
+local LogoGrad = Instance.new("UIGradient", LogoBadge)
+LogoGrad.Rotation = 45
+LogoGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Settings.Color),
+    ColorSequenceKeypoint.new(0.5, Settings.Color2),
+    ColorSequenceKeypoint.new(1, Settings.Color)
+}
+
+local LogoInner = Instance.new("Frame", LogoBadge)
+LogoInner.Size = UDim2.new(1, -8, 1, -8)
+LogoInner.Position = UDim2.new(0, 4, 0, 4)
+LogoInner.BackgroundColor3 = Color3.fromRGB(20, 14, 30)
+LogoInner.BorderSizePixel = 0
+Instance.new("UICorner", LogoInner).CornerRadius = UDim.new(1, 0)
+
+local LogoN = Instance.new("TextLabel", LogoBadge)
+LogoN.Size = UDim2.new(1, 0, 1, 0)
+LogoN.BackgroundTransparency = 1
+LogoN.Text = "N"
+LogoN.TextColor3 = Color3.fromRGB(255, 255, 255)
+LogoN.Font = Enum.Font.GothamBlack
+LogoN.TextSize = 22
+LogoN.ZIndex = 5
+
+local LogoShine = Instance.new("Frame", LogoBadge)
+LogoShine.Size = UDim2.new(1, 0, 1, 0)
+LogoShine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+LogoShine.BorderSizePixel = 0
+LogoShine.ZIndex = 6
+LogoShine.Active = false
+Instance.new("UICorner", LogoShine).CornerRadius = UDim.new(1, 0)
+
+local ShineGrad = Instance.new("UIGradient", LogoShine)
+ShineGrad.Rotation = 25
+ShineGrad.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+ShineGrad.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 1),
+    NumberSequenceKeypoint.new(0.45, 1),
+    NumberSequenceKeypoint.new(0.5, 0.1),
+    NumberSequenceKeypoint.new(0.55, 1),
+    NumberSequenceKeypoint.new(1, 1),
+})
+ShineGrad.Offset = Vector2.new(-1.5, 0)
+
+task.spawn(function()
+    while LogoShine.Parent do
+        ShineGrad.Offset = Vector2.new(-1.5, 0)
+        task.wait(2.5)
+        local t = 0
+        while t < 1 do
+            t = t + 0.05
+            ShineGrad.Offset = Vector2.new(-1.5 + t * 3, 0)
+            task.wait(0.02)
+        end
+    end
+end)
+
+task.spawn(function()
+    while LogoGlow.Parent do
+        for i = 0, 1, 0.1 do
+            if not LogoGlow.Parent then break end
+            LogoGlow.BackgroundTransparency = 0.6 + i * 0.3
+            LogoGlow.Size = UDim2.new(1, 8 + i * 4, 1, 8 + i * 4)
+            LogoGlow.Position = UDim2.new(0, -4 - i * 2, 0, -4 - i * 2)
+            task.wait(0.04)
+        end
+        for i = 1, 0, -0.1 do
+            if not LogoGlow.Parent then break end
+            LogoGlow.BackgroundTransparency = 0.6 + i * 0.3
+            LogoGlow.Size = UDim2.new(1, 8 + i * 4, 1, 8 + i * 4)
+            LogoGlow.Position = UDim2.new(0, -4 - i * 2, 0, -4 - i * 2)
+            task.wait(0.04)
+        end
+    end
+end)
+
+local Title = Instance.new("TextLabel", Header)
+Title.Size = UDim2.new(1, -110, 0, 22)
+Title.Position = UDim2.new(0, 68, 0, 12)
+Title.BackgroundTransparency = 1
+Title.Text = "KIRMIZI vs MAVİ"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.ZIndex = 3
+
+local Subtitle = Instance.new("TextLabel", Header)
+Subtitle.Size = UDim2.new(1, -110, 0, 14)
+Subtitle.Position = UDim2.new(0, 68, 0, 34)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Text = DEVICE_NAME .. " · v8"
+Subtitle.TextColor3 = Color3.fromRGB(200, 180, 220)
+Subtitle.Font = Enum.Font.Gotham
+Subtitle.TextSize = 10
+Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+Subtitle.ZIndex = 3
+
+local MinBtn = Instance.new("TextButton", Header)
+MinBtn.Size = UDim2.new(0, 32, 0, 32)
+MinBtn.Position = UDim2.new(1, -42, 0.5, -16)
+MinBtn.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
+MinBtn.BackgroundTransparency = 0.3
+MinBtn.Text = "−"; MinBtn.TextColor3 = Color3.fromRGB(220, 210, 240)
+MinBtn.Font = Enum.Font.GothamBold; MinBtn.TextSize = 22
+MinBtn.AutoButtonColor = false; MinBtn.ZIndex = 4
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(1, 0)
+
+local dragging, dragStart, startPos
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true; dragStart = input.Position; startPos = Main.Position
+    end
+end)
+Header.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+local FloatBtn = Instance.new("TextButton", Gui)
+FloatBtn.Size = UDim2.new(0, 60, 0, 60)
+FloatBtn.Position = UDim2.new(0, 20, 0.5, -30)
+FloatBtn.BackgroundColor3 = Settings.Color
+FloatBtn.Text = "N"; FloatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatBtn.Font = Enum.Font.GothamBlack; FloatBtn.TextSize = 26
+FloatBtn.Visible = false; FloatBtn.AutoButtonColor = false
+Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(1, 0)
+local FloatGrad = Instance.new("UIGradient", FloatBtn)
+FloatGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Settings.Color),
+    ColorSequenceKeypoint.new(1, Settings.Color2)
+}
+
+MinBtn.Activated:Connect(function() Main.Visible = false; FloatBtn.Visible = true end)
+FloatBtn.Activated:Connect(function() Main.Visible = true; FloatBtn.Visible = false end)
+
+local FpsPanel = Instance.new("Frame", Gui)
+FpsPanel.Size = UDim2.new(0, Settings.FpsSize, 0, 28)
+FpsPanel.Position = UDim2.new(1, -(Settings.FpsSize + 12), 0, 12)
+FpsPanel.BackgroundColor3 = Color3.fromRGB(14, 12, 20)
+FpsPanel.BackgroundTransparency = 0.15
+FpsPanel.BorderSizePixel = 0; FpsPanel.Active = false
+Instance.new("UICorner", FpsPanel).CornerRadius = UDim.new(0, 8)
+local FpsStroke = Instance.new("UIStroke", FpsPanel)
+FpsStroke.Thickness = 1.5; FpsStroke.Color = Color3.fromRGB(100, 220, 150); FpsStroke.Transparency = 0.4
+
+local FpsDot = Instance.new("Frame", FpsPanel)
+FpsDot.Size = UDim2.new(0, 8, 0, 8); FpsDot.Position = UDim2.new(0, 8, 0.5, -4)
+FpsDot.BackgroundColor3 = Color3.fromRGB(100, 220, 150); FpsDot.BorderSizePixel = 0
+Instance.new("UICorner", FpsDot).CornerRadius = UDim.new(1, 0)
+
+local FpsText = Instance.new("TextLabel", FpsPanel)
+FpsText.Size = UDim2.new(1, -26, 1, 0); FpsText.Position = UDim2.new(0, 22, 0, 0)
+FpsText.BackgroundTransparency = 1; FpsText.Text = "FPS: 60"
+FpsText.TextColor3 = Color3.fromRGB(100, 220, 150); FpsText.Font = Enum.Font.GothamBold
+FpsText.TextSize = 12; FpsText.TextXAlignment = Enum.TextXAlignment.Left
+
+task.spawn(function()
+    while FpsPanel.Parent do
+        task.wait(0.5)
+        FpsText.Text = "FPS: " .. fps
+        local c
+        if fps >= 45 then c = Color3.fromRGB(100, 220, 150)
+        elseif fps >= 25 then c = Color3.fromRGB(255, 200, 80)
+        else c = Color3.fromRGB(255, 90, 90) end
+        FpsText.TextColor3 = c; FpsDot.BackgroundColor3 = c; FpsStroke.Color = c
+    end
+end)
+
+-- ==================== SEKMELER ====================
+local TabBar = Instance.new("Frame", Main)
+TabBar.Size = UDim2.new(1, -24, 0, 40)
+TabBar.Position = UDim2.new(0, 12, 0, 74)
+TabBar.BackgroundColor3 = Color3.fromRGB(20, 15, 30)
+TabBar.BorderSizePixel = 0; TabBar.Active = false
+Instance.new("UICorner", TabBar).CornerRadius = UDim.new(0, 10)
+
+local function makeTab(name, xPos, w)
+    local t = Instance.new("TextButton", TabBar)
+    t.Size = UDim2.new(w, -4, 1, -6)
+    t.Position = UDim2.new(xPos, 2, 0, 3)
+    t.BackgroundColor3 = Color3.fromRGB(30, 22, 42)
+    t.BackgroundTransparency = 1
+    t.TextColor3 = Color3.fromRGB(180, 160, 220)
+    t.Font = Enum.Font.GothamBold; t.TextSize = 9
+    t.Text = name; t.AutoButtonColor = false
+    Instance.new("UICorner", t).CornerRadius = UDim.new(0, 8)
+    return t
+end
+
+local CombatTab = makeTab("⚔ SAVAŞ", 0.00, 0.25)
+local PlayerTab = makeTab("👥 OYUNCU", 0.25, 0.25)
+local TeleportTab = makeTab("📍 TP", 0.50, 0.25)
+local SettingsTab = makeTab("⚙ AYAR", 0.75, 0.25)
+
+local function setTabActive(tab, active)
+    if active then
+        tab.BackgroundTransparency = 0
+        tab.BackgroundColor3 = Settings.Color
+        tab.TextColor3 = Color3.fromRGB(30, 25, 40)
+    else
+        tab.BackgroundTransparency = 1
+        tab.TextColor3 = Color3.fromRGB(180, 160, 220)
+    end
+end
+
+local function makeContent()
+    local c = Instance.new("ScrollingFrame", Main)
+    c.Size = UDim2.new(1, -24, 1, -172)
+    c.Position = UDim2.new(0, 12, 0, 122)
+    c.BackgroundTransparency = 1; c.BorderSizePixel = 0
+    c.ScrollBarThickness = 4; c.ScrollBarImageColor3 = Settings.Color
+    c.AutomaticCanvasSize = Enum.AutomaticSize.Y; c.CanvasSize = UDim2.new(0, 0, 0, 0)
+    c.Visible = false; c.Active = true
+    Instance.new("UIListLayout", c).Padding = UDim.new(0, 6)
+    return c
+end
+
+local CombatContent = makeContent()
+local PlayerContent = makeContent()
+local TeleportContent = makeContent()
+local SettingsContent = makeContent()
+CombatContent.Visible = true
+
+local function switchTab(tab)
+    CombatContent.Visible = (tab == "c")
+    PlayerContent.Visible = (tab == "p")
+    TeleportContent.Visible = (tab == "t")
+    SettingsContent.Visible = (tab == "s")
+    setTabActive(CombatTab, tab == "c")
+    setTabActive(PlayerTab, tab == "p")
+    setTabActive(TeleportTab, tab == "t")
+    setTabActive(SettingsTab, tab == "s")
+end
+switchTab("c")
+CombatTab.Activated:Connect(function() switchTab("c") end)
+PlayerTab.Activated:Connect(function() switchTab("p") end)
+TeleportTab.Activated:Connect(function() switchTab("t") end)
+SettingsTab.Activated:Connect(function() switchTab("s") end)
+
+-- ==================== TOGGLE ====================
+local function CreateToggle(parent, text, emoji, callback, defaultState)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = UDim2.new(1, 0, 0, 48)
+    btn.BackgroundColor3 = Color3.fromRGB(22, 17, 32); btn.Text = ""; btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+    local st = Instance.new("UIStroke", btn); st.Thickness = 1; st.Color = Color3.fromRGB(45, 35, 60)
+
+    local ic = Instance.new("TextLabel", btn)
+    ic.Size = UDim2.new(0, 34, 1, 0); ic.Position = UDim2.new(0, 12, 0, 0)
+    ic.BackgroundTransparency = 1; ic.Text = emoji; ic.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ic.Font = Enum.Font.GothamBold; ic.TextSize = 18; ic.Active = false
+
+    local tx = Instance.new("TextLabel", btn)
+    tx.Size = UDim2.new(1, -120, 1, 0); tx.Position = UDim2.new(0, 50, 0, 0)
+    tx.BackgroundTransparency = 1; tx.Text = text; tx.TextColor3 = Color3.fromRGB(200, 195, 220)
+    tx.Font = Enum.Font.GothamBold; tx.TextSize = 12; tx.TextXAlignment = Enum.TextXAlignment.Left
+    tx.Active = false
+
+    local switchBg = Instance.new("Frame", btn)
+    switchBg.Size = UDim2.new(0, 44, 0, 24); switchBg.Position = UDim2.new(1, -58, 0.5, -12)
+    switchBg.BackgroundColor3 = Color3.fromRGB(45, 35, 60); switchBg.BorderSizePixel = 0
+    switchBg.Active = false
+    Instance.new("UICorner", switchBg).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("Frame", switchBg)
+    knob.Size = UDim2.new(0, 18, 0, 18); knob.Position = UDim2.new(0, 3, 0.5, -9)
+    knob.BackgroundColor3 = Color3.fromRGB(180, 180, 200); knob.BorderSizePixel = 0
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    local state = defaultState or false
+    local function upd()
+        if state then
+            switchBg.BackgroundColor3 = Settings.Color
+            knob.Position = UDim2.new(1, -21, 0.5, -9); knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            tx.TextColor3 = Color3.fromRGB(255, 255, 255); st.Color = Settings.Color
+            btn.BackgroundColor3 = Color3.fromRGB(30, 22, 45)
+        else
+            switchBg.BackgroundColor3 = Color3.fromRGB(45, 35, 60)
+            knob.Position = UDim2.new(0, 3, 0.5, -9); knob.BackgroundColor3 = Color3.fromRGB(180, 180, 200)
+            tx.TextColor3 = Color3.fromRGB(200, 195, 220); st.Color = Color3.fromRGB(45, 35, 60)
+            btn.BackgroundColor3 = Color3.fromRGB(22, 17, 32)
+        end
+    end
+    btn.Activated:Connect(function()
+        state = not state; upd(); if callback then callback(state) end
+    end)
+    upd()
+    return btn
+end
+
+local function createSlider(parent, label, minV, maxV, currentVal, callback, suffix)
+    local row = Instance.new("Frame", parent)
+    row.Size = UDim2.new(1, 0, 0, 50); row.BackgroundColor3 = Color3.fromRGB(22, 17, 32); row.BorderSizePixel = 0
+    row.Active = false
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
+    local rs = Instance.new("UIStroke", row); rs.Thickness = 1; rs.Color = Color3.fromRGB(45, 35, 60)
+
+    local lbl = Instance.new("TextLabel", row)
+    lbl.Size = UDim2.new(1, -90, 0, 18); lbl.Position = UDim2.new(0, 12, 0, 6)
+    lbl.BackgroundTransparency = 1; lbl.Text = label; lbl.TextColor3 = Color3.fromRGB(200, 195, 220)
+    lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Active = false
+
+    local badge = Instance.new("Frame", row)
+    badge.Size = UDim2.new(0, 56, 0, 18); badge.Position = UDim2.new(1, -68, 0, 6)
+    badge.BackgroundColor3 = Color3.fromRGB(40, 30, 55); badge.BorderSizePixel = 0
+    badge.Active = false
+    Instance.new("UICorner", badge).CornerRadius = UDim.new(0, 6)
+    local bs = Instance.new("UIStroke", badge); bs.Thickness = 1; bs.Color = Settings.Color
+    local valLbl = Instance.new("TextLabel", badge)
+    valLbl.Size = UDim2.new(1, 0, 1, 0); valLbl.BackgroundTransparency = 1
+    valLbl.Text = tostring(math.floor(currentVal * 10) / 10) .. (suffix or "")
+    valLbl.TextColor3 = Color3.fromRGB(255, 255, 255); valLbl.Font = Enum.Font.GothamBold; valLbl.TextSize = 10
+    valLbl.Active = false
+
+    local dn = Instance.new("TextButton", row)
+    dn.Size = UDim2.new(0, 55, 0, 20); dn.Position = UDim2.new(0, 12, 0, 27)
+    dn.BackgroundColor3 = Color3.fromRGB(80, 30, 55); dn.Text = "−"
+    dn.TextColor3 = Color3.fromRGB(255, 255, 255); dn.Font = Enum.Font.GothamBold; dn.TextSize = 15
+    dn.AutoButtonColor = false
+    Instance.new("UICorner", dn).CornerRadius = UDim.new(0, 5)
+
+    local up = Instance.new("TextButton", row)
+    up.Size = UDim2.new(0, 55, 0, 20); up.Position = UDim2.new(1, -67, 0, 27)
+    up.BackgroundColor3 = Color3.fromRGB(40, 75, 55); up.Text = "+"
+    up.TextColor3 = Color3.fromRGB(255, 255, 255); up.Font = Enum.Font.GothamBold; up.TextSize = 15
+    up.AutoButtonColor = false
+    Instance.new("UICorner", up).CornerRadius = UDim.new(0, 5)
+
+    local step = (maxV - minV) / 20
+    local function setV(v)
+        currentVal = v; valLbl.Text = tostring(math.floor(v * 10) / 10) .. (suffix or ""); callback(v)
+    end
+    dn.Activated:Connect(function() setV(math.max(minV, currentVal - step)) end)
+    up.Activated:Connect(function() setV(math.min(maxV, currentVal + step)) end)
+end
+
+-- ==================== KILIÇ YARDIMCILARI ====================
+local function equipSword()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+
+    -- Zaten bir tool elde mi?
+    local equipped = char:FindFirstChildOfClass("Tool")
+    if equipped then return true end
+
+    -- Backpack'te kılıç var mı?
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if not backpack then return false end
+
+    -- Önce "sword/kılıç/blade" içeren tool'u ara
+    local candidates = {}
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            local n = tool.Name:lower()
+            if n:find("sword") or n:find("kılıç") or n:find("kilic") or n:find("blade") or n:find("katana") then
+                table.insert(candidates, 1, tool) -- öne ekle (öncelikli)
+            else
+                table.insert(candidates, tool)
+            end
+        end
+    end
+
+    if #candidates == 0 then return false end
+
+    pcall(function()
+        hum:EquipTool(candidates[1])
+    end)
+    return true
+end
+
+local function swingWeapon()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool then
+        pcall(function() tool:Activate() end)
+    end
+end
+
+-- ==================== SAVAŞ SEKMESİ ====================
+CreateToggle(CombatContent, "Aimlock + Shiftlock", "🎯", function(s)
+    Settings.Aimlock = s
+    if s then
+        pcall(function() UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter end)
+    else
+        pcall(function() UserInputService.MouseBehavior = Enum.MouseBehavior.Default end)
+        currentTarget = nil; aimTargetPart = nil
+    end
+end)
+
+CreateToggle(CombatContent, "ESP", "👁️", function(s)
+    Settings.ESP = s
+    if not s then cleanAllESP() end
+end)
+
+CreateToggle(CombatContent, "Otomatik Kill (Sıra Sıra)", "⚔️", function(s)
+    Settings.AutoKill = s
+    if s then
+        autoKillTarget = nil
+        autoKillList = {}
+        autoKillIndex = 1
+        autoKillAttackTimer = 0
+        -- ✅ Kılıcı otomatik eline al
+        local ok = equipSword()
+        if ok then
+            showToast("Kılıç eline alındı! Başlıyor...", "⚔️")
+        else
+            showToast("Kılıç bulunamadı! Envanteri kontrol et.", "⚠️")
+        end
+    else
+        autoKillTarget = nil
+        autoKillAttackTimer = 0
+    end
+end)
+
+CreateToggle(CombatContent, "Speed", "⚡", function(s) Settings.Speed = s end)
+CreateToggle(CombatContent, "Jump", "🦘", function(s) Settings.Jump = s end)
+
+local stickyLabel = Instance.new("TextLabel", CombatContent)
+stickyLabel.Size = UDim2.new(1, 0, 0, 36)
+stickyLabel.BackgroundColor3 = Color3.fromRGB(22, 17, 32)
+stickyLabel.BorderSizePixel = 0
+stickyLabel.Text = "🧲 Yapışma: Boşta"
+stickyLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+stickyLabel.Font = Enum.Font.GothamBold
+stickyLabel.TextSize = 11
+stickyLabel.Active = false
+Instance.new("UICorner", stickyLabel).CornerRadius = UDim.new(0, 8)
+
+local autoKillLabel = Instance.new("TextLabel", CombatContent)
+autoKillLabel.Size = UDim2.new(1, 0, 0, 36)
+autoKillLabel.BackgroundColor3 = Color3.fromRGB(22, 17, 32)
+autoKillLabel.BorderSizePixel = 0
+autoKillLabel.Text = "⚔️ Auto Kill: Boşta"
+autoKillLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+autoKillLabel.Font = Enum.Font.GothamBold
+autoKillLabel.TextSize = 11
+autoKillLabel.Active = false
+Instance.new("UICorner", autoKillLabel).CornerRadius = UDim.new(0, 8)
+
+-- ==================== OYUNCU LİSTESİ ====================
+local playerListFrame = Instance.new("Frame", PlayerContent)
+playerListFrame.Size = UDim2.new(1, 0, 0, 0)
+playerListFrame.AutomaticSize = Enum.AutomaticSize.Y
+playerListFrame.BackgroundTransparency = 1
+playerListFrame.Active = false
+Instance.new("UIListLayout", playerListFrame).Padding = UDim.new(0, 4)
+
+local function refreshPlayerList()
+    for _, child in ipairs(playerListFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local row = Instance.new("Frame", playerListFrame)
+            row.Size = UDim2.new(1, 0, 0, 50)
+            row.BackgroundColor3 = Color3.fromRGB(22, 17, 32)
+            row.BorderSizePixel = 0
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+            local nameLbl = Instance.new("TextLabel", row)
+            nameLbl.Size = UDim2.new(1, -130, 0, 18)
+            nameLbl.Position = UDim2.new(0, 8, 0, 6)
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Text = p.Name .. (hasForceField(p) and " 🛡️" or "")
+            nameLbl.TextColor3 = Color3.fromRGB(220, 210, 240)
+            nameLbl.Font = Enum.Font.GothamBold
+            nameLbl.TextSize = 11
+            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+            local teamLbl = Instance.new("TextLabel", row)
+            teamLbl.Size = UDim2.new(1, -130, 0, 16)
+            teamLbl.Position = UDim2.new(0, 8, 0, 26)
+            teamLbl.BackgroundTransparency = 1
+            teamLbl.Text = getTeamLabel(p)
+            teamLbl.TextColor3 = getTeamColor(p)
+            teamLbl.Font = Enum.Font.GothamBold
+            teamLbl.TextSize = 10
+            teamLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+            local stickBtn = Instance.new("TextButton", row)
+            stickBtn.Size = UDim2.new(0, 50, 0, 34)
+            stickBtn.Position = UDim2.new(1, -110, 0.5, -17)
+            stickBtn.BackgroundColor3 = (stickyTarget == p) and Color3.fromRGB(200, 120, 40) or Color3.fromRGB(60, 120, 60)
+            stickBtn.Text = (stickyTarget == p) and "Bırak" or "Yapış"
+            stickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            stickBtn.Font = Enum.Font.GothamBold
+            stickBtn.TextSize = 10
+            stickBtn.AutoButtonColor = false
+            Instance.new("UICorner", stickBtn).CornerRadius = UDim.new(0, 6)
+            stickBtn.Activated:Connect(function()
+                if stickyTarget == p then
+                    stickyTarget = nil
+                else
+                    stickyTarget = p
+                end
+                refreshPlayerList()
+            end)
+
+            local tpBtn = Instance.new("TextButton", row)
+            tpBtn.Size = UDim2.new(0, 50, 0, 34)
+            tpBtn.Position = UDim2.new(1, -55, 0.5, -17)
+            tpBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 120)
+            tpBtn.Text = "TP"
+            tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tpBtn.Font = Enum.Font.GothamBold
+            tpBtn.TextSize = 10
+            tpBtn.AutoButtonColor = false
+            Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 6)
+            tpBtn.Activated:Connect(function()
+                local targetHrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if targetHrp and myHrp then
+                    myHrp.CFrame = CFrame.new(targetHrp.Position + Vector3.new(0, 5, 0))
+                end
+            end)
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(3)
+        pcall(refreshPlayerList)
+    end
+end)
+refreshPlayerList()
+
+-- ==================== TP SEKMESİ ====================
+local tpListFrame = Instance.new("Frame", TeleportContent)
+tpListFrame.Size = UDim2.new(1, 0, 0, 0)
+tpListFrame.AutomaticSize = Enum.AutomaticSize.Y
+tpListFrame.BackgroundTransparency = 1
+tpListFrame.Active = false
+Instance.new("UIListLayout", tpListFrame).Padding = UDim.new(0, 4)
+
+local function refreshTpList()
+    for _, child in ipairs(tpListFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local row = Instance.new("Frame", tpListFrame)
+            row.Size = UDim2.new(1, 0, 0, 50)
+            row.BackgroundColor3 = Color3.fromRGB(22, 17, 32)
+            row.BorderSizePixel = 0
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+            local nameLbl = Instance.new("TextLabel", row)
+            nameLbl.Size = UDim2.new(1, -75, 0, 18)
+            nameLbl.Position = UDim2.new(0, 8, 0, 6)
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Text = p.Name
+            nameLbl.TextColor3 = Color3.fromRGB(220, 210, 240)
+            nameLbl.Font = Enum.Font.GothamBold
+            nameLbl.TextSize = 11
+            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+            local teamLbl = Instance.new("TextLabel", row)
+            teamLbl.Size = UDim2.new(1, -75, 0, 16)
+            teamLbl.Position = UDim2.new(0, 8, 0, 26)
+            teamLbl.BackgroundTransparency = 1
+            teamLbl.Text = getTeamLabel(p)
+            teamLbl.TextColor3 = getTeamColor(p)
+            teamLbl.Font = Enum.Font.GothamBold
+            teamLbl.TextSize = 10
+            teamLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+            local tpBtn = Instance.new("TextButton", row)
+            tpBtn.Size = UDim2.new(0, 60, 0, 34)
+            tpBtn.Position = UDim2.new(1, -68, 0.5, -17)
+            tpBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 120)
+            tpBtn.Text = "Git"
+            tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tpBtn.Font = Enum.Font.GothamBold
+            tpBtn.TextSize = 11
+            tpBtn.AutoButtonColor = false
+            Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 6)
+            tpBtn.Activated:Connect(function()
+                local targetHrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if targetHrp and myHrp then
+                    myHrp.CFrame = CFrame.new(targetHrp.Position + Vector3.new(0, 3, 0))
+                end
+            end)
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(3)
+        pcall(refreshTpList)
+    end
+end)
+refreshTpList()
+
+-- ==================== AYARLAR SEKMESİ ====================
+local function sectionLabel(parent, text)
+    local lbl = Instance.new("TextLabel", parent)
+    lbl.Size = UDim2.new(1, 0, 0, 18); lbl.BackgroundTransparency = 1
+    lbl.Text = "── " .. text .. " ──"; lbl.TextColor3 = Settings.Color
+    lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 10; lbl.TextXAlignment = Enum.TextXAlignment.Center
+    lbl.Active = false
+end
+
+sectionLabel(SettingsContent, "AIMLOCK")
+createSlider(SettingsContent, "Yumuşaklık", 0, 1, Settings.Smoothness, function(v) Settings.Smoothness = v end)
+createSlider(SettingsContent, "Maks Menzil", 50, 500, Settings.MaxRange, function(v) Settings.MaxRange = v end, "st")
+
+sectionLabel(SettingsContent, "VURUŞ BÖLGESİ")
+local aimRow = Instance.new("Frame", SettingsContent)
+aimRow.Size = UDim2.new(1, 0, 0, 32); aimRow.BackgroundTransparency = 1
+aimRow.Active = false
+local aimGrid = Instance.new("UIListLayout", aimRow)
+aimGrid.FillDirection = Enum.FillDirection.Horizontal; aimGrid.Padding = UDim.new(0, 6)
+aimGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local aimParts = {{name="Head", v="Head"}, {name="Torso", v="HumanoidRootPart"}, {name="Random", v="Random"}}
+local aimBtns = {}
+for _, ap in ipairs(aimParts) do
+    local b = Instance.new("TextButton", aimRow)
+    b.Size = UDim2.new(0, 90, 1, 0)
+    b.BackgroundColor3 = (Settings.AimPart == ap.v) and Settings.Color or Color3.fromRGB(35, 25, 50)
+    b.TextColor3 = (Settings.AimPart == ap.v) and Color3.fromRGB(30, 25, 40) or Color3.fromRGB(200, 195, 220)
+    b.Text = ap.name; b.Font = Enum.Font.GothamBold; b.TextSize = 11; b.AutoButtonColor = false
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    table.insert(aimBtns, {btn = b, v = ap.v})
+    b.Activated:Connect(function()
+        Settings.AimPart = ap.v
+        for _, ab in ipairs(aimBtns) do
+            local sel = (ab.v == ap.v)
+            ab.btn.BackgroundColor3 = sel and Settings.Color or Color3.fromRGB(35, 25, 50)
+            ab.btn.TextColor3 = sel and Color3.fromRGB(30, 25, 40) or Color3.fromRGB(200, 195, 220)
+        end
+    end)
+end
+
+sectionLabel(SettingsContent, "ESP")
+CreateToggle(SettingsContent, "Highlight", "✨", function(s) Settings.ESP_Highlight = s end, true)
+CreateToggle(SettingsContent, "Can Barı", "💚", function(s) Settings.ESP_HealthBar = s end, true)
+CreateToggle(SettingsContent, "Mesafe", "📐", function(s) Settings.ESP_Distance = s end, true)
+
+sectionLabel(SettingsContent, "HAREKET")
+createSlider(SettingsContent, "WalkSpeed", 16, 200, Settings.WalkSpeed, function(v) Settings.WalkSpeed = v end)
+createSlider(SettingsContent, "JumpPower", 50, 300, Settings.JumpPower, function(v) Settings.JumpPower = v end)
+createSlider(SettingsContent, "FPS Boyut", 80, 200, Settings.FpsSize, function(v)
+    Settings.FpsSize = v
+    FpsPanel.Size = UDim2.new(0, v, 0, 28)
+    FpsPanel.Position = UDim2.new(1, -(v + 12), 0, 12)
+end, "px")
+
+-- ==================== ESP ====================
+local espData = {}
+
+local function getHealthColor(hum)
+    local ratio = hum.Health / math.max(1, hum.MaxHealth)
+    if ratio > 0.6 then return Color3.fromRGB(100, 220, 150)
+    elseif ratio > 0.3 then return Color3.fromRGB(255, 200, 80)
+    else return Color3.fromRGB(255, 90, 90) end
+end
+
+local function getAdornee(char)
+    return char:FindFirstChild("Head")
+        or char:FindFirstChild("HumanoidRootPart")
+        or char:FindFirstChild("UpperTorso")
+        or char:FindFirstChild("Torso")
+end
+
+local function removeESP(p)
+    local d = espData[p]
+    if d then
+        if d.billboard then d.billboard:Destroy() end
+        if d.highlight then d.highlight:Destroy() end
+        espData[p] = nil
+    end
+end
+
+function cleanAllESP()
+    for p, _ in pairs(espData) do removeESP(p) end
+    espData = {}
+end
+
+local function createESP(p, char, adornee)
+    local d = espData[p]
+    if d then
+        if d.character == char and d.billboard and d.billboard.Parent then return end
+        removeESP(p)
+    end
+    if not adornee then return end
+
+    local hl = Instance.new("Highlight")
+    hl.Name = "RVB_HL"; hl.Adornee = char
+    hl.FillTransparency = 0.7; hl.OutlineTransparency = 0
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.FillColor = getTeamColor(p); hl.OutlineColor = getTeamColor(p)
+    hl.Parent = char
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "RVB_BB"; bb.Adornee = adornee
+    bb.Size = UDim2.new(0, 130, 0, 58)
+    bb.StudsOffset = Vector3.new(0, 3.2, 0)
+    bb.AlwaysOnTop = true; bb.MaxDistance = 300; bb.LightInfluence = 0
+    bb.Parent = adornee
+
+    local nameLbl = Instance.new("TextLabel", bb)
+    nameLbl.Size = UDim2.new(1, 0, 0, 20); nameLbl.Position = UDim2.new(0, 0, 0, 0)
+    nameLbl.BackgroundTransparency = 1; nameLbl.Text = p.Name
+    nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255); nameLbl.TextStrokeTransparency = 0.3
+    nameLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextSize = 14; nameLbl.Parent = bb
+
+    local barBg = Instance.new("Frame", bb)
+    barBg.Size = UDim2.new(0.7, 0, 0, 6); barBg.Position = UDim2.new(0.15, 0, 0, 22)
+    barBg.BackgroundColor3 = Color3.fromRGB(30, 25, 40); barBg.BorderSizePixel = 0
+    Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 3)
+
+    local barFill = Instance.new("Frame", barBg)
+    barFill.Size = UDim2.new(1, 0, 1, 0); barFill.BackgroundColor3 = Color3.fromRGB(100, 220, 150)
+    barFill.BorderSizePixel = 0
+    Instance.new("UICorner", barFill).CornerRadius = UDim.new(0, 3)
+
+    local distTxt = Instance.new("TextLabel", bb)
+    distTxt.Size = UDim2.new(1, 0, 0, 14); distTxt.Position = UDim2.new(0, 0, 0, 32)
+    distTxt.BackgroundTransparency = 1; distTxt.TextColor3 = Color3.fromRGB(220, 220, 240)
+    distTxt.TextStrokeTransparency = 0.4; distTxt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    distTxt.Font = Enum.Font.Gotham; distTxt.TextSize = 11; distTxt.Text = "0 stud"
+    distTxt.Parent = bb
+
+    espData[p] = {billboard = bb, highlight = hl, character = char, adornee = adornee, barFill = barFill, distTxt = distTxt}
+end
+
+task.spawn(function()
+    while true do
+        task.wait(Settings._perfMode == "low" and 2 or 1)
+        if Settings.ESP then
+            for p, d in pairs(espData) do
+                if not p.Parent or not d.billboard or not d.billboard.Parent or not d.character or not d.character.Parent or isTeammate(p) then
+                    removeESP(p)
+                end
+            end
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and not isTeammate(p) then
+                    local char = p.Character
+                    if char then
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        local adornee = getAdornee(char)
+                        if adornee and hum and hum.Health > 0 then
+                            local d = espData[p]
+                            if not d or d.character ~= char or not d.billboard.Parent then
+                                createESP(p, char, adornee)
+                            end
+                        else
+                            if espData[p] then removeESP(p) end
+                        end
+                    else
+                        if espData[p] then removeESP(p) end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(Settings._perfMode == "low" and 0.5 or 0.25)
+        if Settings.ESP then
+            local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            for p, d in pairs(espData) do
+                if d.billboard and d.billboard.Parent and p.Character then
+                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                    local adornee = d.adornee
+                    if hum and adornee and adornee.Parent then
+                        local ratio = hum.Health / math.max(1, hum.MaxHealth)
+                        local hc = getHealthColor(hum)
+                        if d.barFill then
+                            d.barFill.Size = UDim2.new(math.clamp(ratio, 0, 1), 0, 1, 0)
+                            d.barFill.BackgroundColor3 = hc
+                            d.barFill.Visible = Settings.ESP_HealthBar
+                        end
+                        if d.highlight then
+                            d.highlight.FillColor = getTeamColor(p)
+                            d.highlight.OutlineColor = getTeamColor(p)
+                            d.highlight.Enabled = Settings.ESP_Highlight
+                        end
+                        if d.distTxt then
+                            if Settings.ESP_Distance and myHrp then
+                                local dist = (myHrp.Position - adornee.Position).Magnitude
+                                d.distTxt.Text = math.floor(dist) .. " stud"
+                                d.distTxt.Visible = true
+                            else
+                                d.distTxt.Visible = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    removeESP(p)
+    if stickyTarget == p then stickyTarget = nil end
+    if autoKillTarget == p then autoKillTarget = nil end
+end)
+
+-- ==================== YARDIMCI ====================
+local function getAimPart(char)
+    if Settings.AimPart == "Random" then
+        local parts = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}
+        local valid = {}
+        for _, n in ipairs(parts) do
+            if char:FindFirstChild(n) then table.insert(valid, n) end
+        end
+        if #valid == 0 then return nil end
+        return char:FindFirstChild(valid[math.random(1, #valid)])
+    end
+    local part = char:FindFirstChild(Settings.AimPart)
+    if not part then part = char:FindFirstChild("Head") end
+    if not part then part = char:FindFirstChild("HumanoidRootPart") end
+    return part
+end
+
+local function getNearestTarget()
+    local best, bestDist = nil, math.huge
+    local bestPart = nil
+    local myChar = LocalPlayer.Character
+    if not myChar then return nil, nil end
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return nil, nil end
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and not isTeammate(p) and p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 and not hasForceField(p) then
+                local part = getAimPart(p.Character)
+                if part then
+                    local dist = (myHrp.Position - part.Position).Magnitude
+                    if dist <= Settings.MaxRange and dist < bestDist then
+                        bestDist = dist; best = p; bestPart = part
+                    end
+                end
+            end
+        end
+    end
+    return best, bestPart
+end
+
+local function refreshAutoKillList()
+    autoKillList = {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and not isTeammate(p) and p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                table.insert(autoKillList, p)
+            end
+        end
+    end
+end
+
+-- ==================== ANA LOOP ====================
+RunService.RenderStepped:Connect(function(dt)
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if Settings.Speed then hum.WalkSpeed = Settings.WalkSpeed else hum.WalkSpeed = 16 end
+            if Settings.Jump then hum.UseJumpPower = true; hum.JumpPower = Settings.JumpPower end
+        end
+    end
+
+    if Settings.Aimlock then
+        if currentTarget then
+            local hum = currentTarget.Character and currentTarget.Character:FindFirstChildOfClass("Humanoid")
+            local valid = currentTarget.Parent and currentTarget.Character and hum and hum.Health > 0
+                and aimTargetPart and aimTargetPart.Parent
+            if not valid then currentTarget = nil; aimTargetPart = nil end
+        end
+        if not currentTarget then
+            local t, part = getNearestTarget()
+            if t and part then currentTarget = t; aimTargetPart = part end
+        end
+    else
+        currentTarget = nil; aimTargetPart = nil
+    end
+end)
+
+RunService:BindToRenderStep("RVBCamFix", Enum.RenderPriority.Camera.Value + 1, function(dt)
+    if Settings.Aimlock and currentTarget and aimTargetPart and aimTargetPart.Parent then
+        local targetCF = CFrame.new(Camera.CFrame.Position, aimTargetPart.Position)
+        local smooth = math.clamp(Settings.Smoothness, 0, 0.95)
+        if smooth <= 0.01 then
+            Camera.CFrame = targetCF
+        else
+            Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 - smooth)
+        end
+    end
+end)
+
+-- ==================== YAPIŞMA ====================
+RunService.Heartbeat:Connect(function()
+    if not stickyTarget then
+        stickyLabel.Text = "🧲 Yapışma: Boşta"
+        stickyLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+        return
+    end
+
+    if not stickyTarget.Parent or not stickyTarget.Character then
+        stickyTarget = nil
+        return
+    end
+    local tChar = stickyTarget.Character
+    local tHrp = tChar:FindFirstChild("HumanoidRootPart")
+    local tHum = tChar:FindFirstChildOfClass("Humanoid")
+    if not tHrp or not tHum or tHum.Health <= 0 then
+        stickyTarget = nil
+        return
+    end
+
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return end
+
+    local lookVec = tHrp.CFrame.LookVector
+    local horizontalLook = Vector3.new(lookVec.X, 0, lookVec.Z)
+    if horizontalLook.Magnitude < 0.01 then
+        horizontalLook = Vector3.new(0, 0, -1)
+    end
+    horizontalLook = horizontalLook.Unit
+
+    local behindPos = tHrp.Position - horizontalLook * 2.5
+    myHrp.CFrame = CFrame.lookAt(behindPos, behindPos + horizontalLook)
+    myHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+    stickyLabel.Text = "🧲 Yapışık: " .. stickyTarget.Name
+    stickyLabel.TextColor3 = Color3.fromRGB(255, 200, 80)
+end)
+
+-- ==================== OTOMATİK KILL (5s Timeout + ForceField) ====================
+local autoKillSwingCooldown = 0
+
+RunService.Heartbeat:Connect(function(dt)
+    if not Settings.AutoKill then
+        autoKillLabel.Text = "⚔️ Auto Kill: Boşta"
+        autoKillLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+        autoKillAttackTimer = 0
+        return
+    end
+
+    autoKillSwingCooldown = autoKillSwingCooldown - dt
+
+    -- Kill listesini yenile
+    if #autoKillList == 0 or not autoKillTarget then
+        refreshAutoKillList()
+        if #autoKillList > 0 then
+            autoKillIndex = 1
+            autoKillTarget = autoKillList[1]
+            autoKillAttackTimer = 0
+        end
+    end
+
+    -- Geçerli hedef kontrol
+    if autoKillTarget then
+        local tChar = autoKillTarget.Character
+        local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+        if not autoKillTarget.Parent or not tChar or not tHum or tHum.Health <= 0 then
+            -- Hedef öldü → sıradakine geç
+            autoKillIndex = autoKillIndex + 1
+            if autoKillIndex > #autoKillList then
+                autoKillIndex = 1
+                refreshAutoKillList()
+            end
+            autoKillTarget = autoKillList[autoKillIndex]
+            autoKillAttackTimer = 0
+            autoKillSwingCooldown = 0.3
+        end
+    end
+
+    if not autoKillTarget then return end
+
+    -- ✅ KALKAN KONTROLÜ: Hedefte kalkan varsa bekle
+    if hasForceField(autoKillTarget) then
+        autoKillLabel.Text = "🛡️ Kalkan bekleniyor: " .. autoKillTarget.Name
+        autoKillLabel.TextColor3 = Color3.fromRGB(100, 180, 255)
+        autoKillAttackTimer = 0 -- Timeout sıfırla, kalkan kalkınca tekrar başlar
+        -- Hedefe yapışma, sadece bekle
+        return
+    end
+
+    local tChar = autoKillTarget.Character
+    if not tChar then return end
+    local tHrp = tChar:FindFirstChild("HumanoidRootPart")
+    if not tHrp then return end
+
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    if not myHrp or not myHum or myHum.Health <= 0 then return end
+
+    -- 5 saniye timeout
+    autoKillAttackTimer = autoKillAttackTimer + dt
+    if autoKillAttackTimer >= 5 then
+        showToast("5s doldu! Sıradaki hedef", "⏱️")
+        autoKillIndex = autoKillIndex + 1
+        if autoKillIndex > #autoKillList then
+            autoKillIndex = 1
+            refreshAutoKillList()
+        end
+        autoKillTarget = autoKillList[autoKillIndex]
+        autoKillAttackTimer = 0
+        autoKillSwingCooldown = 0.3
+        return
+    end
+
+    -- Hedefin arkasına yapış
+    local lookVec = tHrp.CFrame.LookVector
+    local horizontalLook = Vector3.new(lookVec.X, 0, lookVec.Z)
+    if horizontalLook.Magnitude < 0.01 then
+        horizontalLook = Vector3.new(0, 0, -1)
+    end
+    horizontalLook = horizontalLook.Unit
+
+    local behindPos = tHrp.Position - horizontalLook * 2.5
+    myHrp.CFrame = CFrame.lookAt(behindPos, behindPos + horizontalLook)
+    myHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+    -- Kılıç salla
+    if autoKillSwingCooldown <= 0 then
+        -- ✅ Kılıç elde değilse geri al
+        if not myChar:FindFirstChildOfClass("Tool") then
+            equipSword()
+        end
+        swingWeapon()
+        autoKillSwingCooldown = 0.25
+    end
+
+    local remain = math.ceil(5 - autoKillAttackTimer)
+    autoKillLabel.Text = "⚔️ " .. autoKillTarget.Name .. " (" .. autoKillIndex .. "/" .. #autoKillList .. ") · " .. remain .. "s"
+    autoKillLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+end)
+
+print("✅ KIRMIZI vs MAVİ HUB v8 yüklendi - " .. DEVICE_NAME)
